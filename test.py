@@ -5,20 +5,25 @@ def lexer(expression):
 
 # 语法分析器
 def parser(tokens):
+    # 更新运算符优先级字典
     precedence = {
         '+': 1,
         '-': 1,
         '*': 2,
-        '/': 2
+        '/': 2,
+        '^': 3,  # 添加指数运算符
+        '%': 2   # 添加取余运算符
     }
-    # 递归下降语法分析
+
+    # 解析函数
     def expression():
-        nonlocal token_index # nonlocal 声明一个变量是非局部变量，即它位于当前函数的外层函数的作用域中
+        nonlocal token_index
         nonlocal tokens
 
         term_result = term()
 
-        while token_index < len(tokens) and tokens[token_index] in ('+', '-'):
+        while (token_index < len(tokens) and tokens[token_index] in ('+', '-')
+               and precedence[tokens[token_index]] >= 1):
             operator = tokens[token_index]
             operator_precedence = precedence[operator]
             token_index += 1
@@ -31,7 +36,7 @@ def parser(tokens):
                 token_index += 1
                 right_term_result = (next_operator, right_term_result, term())
 
-        term_result = (operator, term_result, right_term_result)
+            term_result = (operator, term_result, right_term_result)
 
         return term_result
 
@@ -41,8 +46,8 @@ def parser(tokens):
 
         factor_result = factor()
 
-        while (token_index < len(tokens) 
-               and tokens[token_index] in ('*', '/')
+        while (token_index < len(tokens)
+               and tokens[token_index] in ('*', '/', '%')
                and precedence[tokens[token_index]] >= 2):
             operator = tokens[token_index]
             token_index += 1
@@ -54,6 +59,22 @@ def parser(tokens):
         nonlocal token_index
         nonlocal tokens
 
+        base_result = base()
+
+        while (token_index < len(tokens)
+               and tokens[token_index] == '^'
+               and precedence[tokens[token_index]] >= 3):
+            operator = tokens[token_index]
+            token_index += 1
+            exponent_result = factor()
+            base_result = (operator, base_result, exponent_result)
+
+        return base_result
+
+    def base():
+        nonlocal token_index
+        nonlocal tokens
+
         if token_index < len(tokens):
             token = tokens[token_index]
             token_index += 1
@@ -61,11 +82,11 @@ def parser(tokens):
             if token.isdigit():
                 return int(token)
             elif token == '(':
-                sub_experssion_result = expression()
+                sub_expression_result = expression()
 
                 if token_index < len(tokens) and tokens[token_index] == ')':
                     token_index += 1
-                    return sub_experssion_result
+                    return sub_expression_result
                 else:
                     raise ValueError("Missing closing parenthesis")
             else:
@@ -73,23 +94,42 @@ def parser(tokens):
         else:
             raise ValueError("Unexpected end of expression")
 
+    def evaluate(ast):
+        if isinstance(ast, int):
+            return ast
+        elif isinstance(ast, tuple):
+            operator = ast[0]
+            left_operand = evaluate(ast[1])
+            right_operand = evaluate(ast[2])
+
+            if operator == '+':
+                return left_operand + right_operand
+            elif operator == '-':
+                return left_operand - right_operand
+            elif operator == '*':
+                return left_operand * right_operand
+            elif operator == '/':
+                return left_operand / right_operand
+            elif operator == '^':
+                return left_operand ** right_operand
+            elif operator == '%':
+                return left_operand % right_operand
+            else:
+                raise ValueError("Invalid operator: " + operator)
+        else:
+            raise ValueError("Invalid AST node")
+
     # 初始化token索引
     token_index = 0
 
     # 开始解析
-    return expression()
-
-# 中间代码生成
-def generate_intermediate_code(expression):
-    return parser(lexer(expression))
-
-# 目标代码生成
-def generate_target_code(intermediate_code):
-    return str(intermediate_code)
+    ast = expression()
+    result = evaluate(ast)
+    return {ast, result}
 
 # 测试计算器
 expression = input("Enter an arithmetic expression: ")
-intermediate_code = generate_intermediate_code(expression)
-target_code = generate_target_code(intermediate_code)
-print("Intermediate Code:", intermediate_code)
-print("Target Code:", target_code)
+tokens = lexer(expression)
+code, result = parser(tokens)
+print("Result:", result)
+print("code:", code)
